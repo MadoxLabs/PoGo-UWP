@@ -16,6 +16,7 @@ using InputElement = SharpDX.Direct3D11.InputElement;
 
 using PokemonGo_UWP.Entities;
 using PokemonGo_UWP.Rendering;
+using SharpDX.IO;
 
 namespace PokemonGo_UWP.Utils
 {
@@ -102,6 +103,12 @@ namespace PokemonGo_UWP.Utils
       await initVideo(element);
 //      initGeo();
       initDX();
+
+            NativeFileStream fileStream = new NativeFileStream(Windows.ApplicationModel.Package.Current.InstalledLocation.Path + "\\Assets\\Shaders\\test.fbx", NativeFileMode.Open, NativeFileAccess.Read);
+            byte[] buffer = new byte[fileStream.Length];
+            fileStream.Read(buffer, 0, (int)fileStream.Length);
+            mxFBXLoaderA loader = new mxFBXLoaderA();
+            loader.process(System.Text.Encoding.ASCII.GetString(buffer));
     }
 
 //    #region Geo Position

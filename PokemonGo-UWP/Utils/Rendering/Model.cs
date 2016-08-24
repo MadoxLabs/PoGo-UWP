@@ -75,7 +75,7 @@ namespace PokemonGo_UWP.Rendering
     internal class fbxObject
     {
         public string type = "none";
-        public int id = 0;
+        public string id = "";
     }
 
     internal class fbxMesh : fbxObject
@@ -124,11 +124,11 @@ namespace PokemonGo_UWP.Rendering
         public fbxBB boundingbox;
     }
 
-    class mxFBXLoaderA
+    public class mxFBXLoaderA
     {
         private enum States { FindObjects, FindTag, ParseGeometry, ParseModel, ParseMaterial, ParseConnections, ParseTexture };
         private List<fbxMaterial> groups = new List<fbxMaterial>();
-        private Dictionary<int, fbxObject> objects = new Dictionary<int, fbxObject>();
+        private Dictionary<string, fbxObject> objects = new Dictionary<string, fbxObject>();
         private fbxMesh curmesh = new fbxMesh();
         private fbxModel curmodel = new fbxModel();
         private fbxMaterial curmaterial = new fbxMaterial();
@@ -281,22 +281,22 @@ namespace PokemonGo_UWP.Rendering
 
         private void save()
         {
-            if (curmesh.id != 0)
+            if (curmesh.id.Length != 0)
             {
                 objects[curmesh.id] = curmesh;
                 curmesh = new fbxMesh();
             }
-            if (curmodel.id != 0)
+            if (curmodel.id.Length != 0)
             {
                 objects[curmodel.id] = curmodel;
                 curmodel = new fbxModel();
             }
-            if (curTexture.id != 0)
+            if (curTexture.id.Length != 0)
             {
                 objects[curTexture.id] = curTexture;
                 curTexture = new fbxTexture();
             }
-            if (curmaterial.id != 0)
+            if (curmaterial.id.Length != 0)
             {
                 objects[curmaterial.id] = curmaterial;
                 curmaterial = new fbxMaterial();
@@ -310,7 +310,7 @@ namespace PokemonGo_UWP.Rendering
 
         }
 
-        private void process(string data)
+        public void process(string data)
         {
             string[] lines = data.Replace("\r", "").Split('\n');
             // hunt for objects
@@ -326,7 +326,7 @@ namespace PokemonGo_UWP.Rendering
                 if (lines[i].IndexOf("Geometry: ") != -1)
                 {
                     save();
-                    curmesh.id = Convert.ToInt32(lines[i].Split(':')[1].Split(',')[0].Trim());
+                    curmesh.id = lines[i].Split(':')[1].Split(',')[0].Trim();
                     lastmapping = 0;
                     state = States.ParseGeometry;
                 }
@@ -334,7 +334,7 @@ namespace PokemonGo_UWP.Rendering
                 else if (lines[i].IndexOf("Model: ") != -1)
                 {
                     save();
-                    curmodel.id = Convert.ToInt32(lines[i].Split(':')[1].Split(',')[0].Trim());
+                    curmodel.id = lines[i].Split(':')[1].Split(',')[0].Trim();
                     curmodel.name = lines[i].Replace("::", ",").Split(':')[1].Split(',')[2].Replace("\"", "").Trim();
 
                     log("Found model: " + curmodel.name);
@@ -344,7 +344,7 @@ namespace PokemonGo_UWP.Rendering
                 else if (lines[i].IndexOf("Material: ") != -1)
                 {
                     save();
-                    curmaterial.id = Convert.ToInt32(lines[i].Split(':')[1].Split(',')[0].Trim());
+                    curmaterial.id = lines[i].Split(':')[1].Split(',')[0].Trim();
                     curmaterial.name = lines[i].Replace("::", ",").Split(':')[1].Split(',')[2].Replace("\"", "").Trim();
 
                     log("Found material: " + curmaterial.name);
@@ -358,7 +358,7 @@ namespace PokemonGo_UWP.Rendering
                 else if (lines[i].IndexOf("Texture: ") != -1)
                 {
                     save();
-                    curTexture.id = Convert.ToInt32(lines[i].Split(':')[1].Split(',')[0].Trim());
+                    curTexture.id = lines[i].Split(':')[1].Split(',')[0].Trim();
                     state = States.ParseTexture;
                 }
 
@@ -367,17 +367,19 @@ namespace PokemonGo_UWP.Rendering
                     if (lines[i].IndexOf("C: ") != -1)
                     {
                         var values = lines[i].Split(',');
-                        var obj1 = objects[Convert.ToInt32(values[1].Trim())];
-                        var obj2 = objects[Convert.ToInt32(values[2].Trim())];
-                        if (obj1 == null || obj2 == null) continue;
-
-                        if (obj1.type == "mesh" && obj2.type == "model")
+                        try
                         {
-                            log("Model " + ((fbxModel)obj2).name + " has geometry");
-                            ((fbxModel)obj2).mesh = (fbxMesh)obj1;
-                        }
-                        else if (obj1.type == "material" && obj2.type == "model") ((fbxMaterial)obj1).models.Add((fbxModel)obj2);
-                        else if (obj2.type == "material" && obj1.type == "texture") ((fbxMaterial)obj2).texture = ((fbxTexture)obj1).file;
+                            var obj1 = objects[values[1].Trim()];
+                            var obj2 = objects[values[2].Trim()];
+
+                            if (obj1.type == "mesh" && obj2.type == "model")
+                            {
+                                log("Model " + ((fbxModel)obj2).name + " has geometry");
+                                ((fbxModel)obj2).mesh = (fbxMesh)obj1;
+                            }
+                            else if (obj1.type == "material" && obj2.type == "model") ((fbxMaterial)obj1).models.Add((fbxModel)obj2);
+                            else if (obj2.type == "material" && obj1.type == "texture") ((fbxMaterial)obj2).texture = ((fbxTexture)obj1).file;
+                        } catch { }
                     }
                 }
 
@@ -440,7 +442,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) values.Add((float)Convert.ToDouble(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length>0) values.Add((float)Convert.ToDouble(v));
                             if (values.Count == num) break;
                         }
                         curmesh.vertexs = values;
@@ -458,7 +460,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) values.Add(Convert.ToInt32(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) values.Add(Convert.ToInt32(v));
                             if (values.Count == num) break;
                         }
                         // check that its trilist and flip the negative ones
@@ -487,7 +489,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) values.Add((float)Convert.ToDouble(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) values.Add((float)Convert.ToDouble(v));
                             if (values.Count == num) break;
                         }
                         curmesh.normals = values;
@@ -507,7 +509,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            uvvalues.pop();
-                            foreach (string v in lines[i].Split(',')) uvvalues.Add((float)Convert.ToDouble(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) uvvalues.Add((float)Convert.ToDouble(v));
                             if (uvvalues.Count == num) break;
                         }
                         curmesh.uv = uvvalues;
@@ -523,7 +525,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) values.Add(Convert.ToInt32(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) values.Add(Convert.ToInt32(v));
                             if (values.Count == num) break;
                         }
                         curmesh.uvindex = values;
