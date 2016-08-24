@@ -100,15 +100,16 @@ namespace PokemonGo_UWP.Utils
 
     public async Task Initialize(CaptureElement element)
     {
-      await initVideo(element);
-//      initGeo();
-      initDX();
-
             NativeFileStream fileStream = new NativeFileStream(Windows.ApplicationModel.Package.Current.InstalledLocation.Path + "\\Assets\\Shaders\\test.fbx", NativeFileMode.Open, NativeFileAccess.Read);
             byte[] buffer = new byte[fileStream.Length];
             fileStream.Read(buffer, 0, (int)fileStream.Length);
             mxFBXLoaderA loader = new mxFBXLoaderA();
             loader.process(System.Text.Encoding.ASCII.GetString(buffer));
+
+      await initVideo(element);
+//      initGeo();
+      initDX();
+
     }
 
 //    #region Geo Position

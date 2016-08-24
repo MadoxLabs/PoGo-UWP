@@ -66,19 +66,19 @@ namespace PokemonGo_UWP.Rendering
         }
     }
 
-    internal class fbxBB
+    public class fbxBB
     {
         public Vector3 min;
         public Vector3 max;
     }
 
-    internal class fbxObject
+    public class fbxObject
     {
         public string type = "none";
         public string id = "";
     }
 
-    internal class fbxMesh : fbxObject
+    public class fbxMesh : fbxObject
     {
         public fbxMesh() { type = "mesh"; }
 
@@ -90,7 +90,7 @@ namespace PokemonGo_UWP.Rendering
         public int mapping;
     }
 
-    internal class fbxModel : fbxObject
+    public class fbxModel : fbxObject
     {
         public fbxModel() { type = "model"; }
 
@@ -102,22 +102,31 @@ namespace PokemonGo_UWP.Rendering
         public Vector3 scale = new Vector3(1, 1, 1);
     }
 
-    internal class fbxMaterial : fbxObject
+    public class fbxMaterial : fbxObject
     {
         public fbxMaterial() { type = "material"; }
 
         public List<fbxModel> models = new List<fbxModel>();
-        public string texture;
+        public Dictionary<string, Vector3> traits = new Dictionary<string, Vector3>();
+        public fbxTexture texture;
         public string name;
     }
 
-    internal class fbxTexture : fbxObject
+    public class fbxTexture : fbxObject
     {
         public fbxTexture() { type = "texture"; }
         public string file;
+        public float alpha;
     }
 
-    internal class fbxFile
+    public class fbxLayeredTexture : fbxObject
+    {
+        public fbxLayeredTexture() { type = "layeredtexture"; }
+        public float alpha;
+        public fbxTexture texture;
+    }
+
+    public class fbxFile
     {
         public Dictionary<string, int> attributes = new Dictionary<string, int>();
         public List<fbxMaterial> groups = new List<fbxMaterial>();
@@ -126,13 +135,16 @@ namespace PokemonGo_UWP.Rendering
 
     public class mxFBXLoaderA
     {
-        private enum States { FindObjects, FindTag, ParseGeometry, ParseModel, ParseMaterial, ParseConnections, ParseTexture };
+        private enum States { FindObjects, FindTag, ParseGeometry, ParseModel, ParseMaterial, ParseConnections, ParseTexture, ParseLayeredTexture };
         private List<fbxMaterial> groups = new List<fbxMaterial>();
         private Dictionary<string, fbxObject> objects = new Dictionary<string, fbxObject>();
         private fbxMesh curmesh = new fbxMesh();
         private fbxModel curmodel = new fbxModel();
         private fbxMaterial curmaterial = new fbxMaterial();
         private fbxTexture curTexture = new fbxTexture();
+        private fbxLayeredTexture curLayeredTexture = new fbxLayeredTexture();
+
+        public fbxFile file = null;
 
         private void done()
         {
@@ -148,7 +160,7 @@ namespace PokemonGo_UWP.Rendering
                 }
             }
 
-            fbxFile file = new fbxFile();
+            file = new fbxFile();
             file.attributes["POS"] = 0;
             file.attributes["TEX0"] = 12;
             file.attributes["NORM"] = 20;
@@ -262,10 +274,12 @@ namespace PokemonGo_UWP.Rendering
             List<float> vertexs = new List<float>();
             List<int> indexes = new List<int>();
 
+            log("baking mesh: " + mesh.id + " - " + vertexstring.Count + " down to " + uniq.Count);
+
             // convert the uniq string list back to an actual vertex list of ints
             foreach (string s in uniq)
                 foreach (string f in s.Trim().Split(' '))
-                    vertexs.Add((float)Convert.ToDouble(f));
+                    vertexs.Add(toFloat(f));
 
             // use the vertexstring list as a key to build the index list
             //   to do this we need a convenience reverse lookup array
@@ -296,6 +310,11 @@ namespace PokemonGo_UWP.Rendering
                 objects[curTexture.id] = curTexture;
                 curTexture = new fbxTexture();
             }
+            if (curLayeredTexture.id.Length != 0)
+            {
+                objects[curLayeredTexture.id] = curLayeredTexture;
+                curLayeredTexture = new fbxLayeredTexture();
+            }
             if (curmaterial.id.Length != 0)
             {
                 objects[curmaterial.id] = curmaterial;
@@ -305,9 +324,22 @@ namespace PokemonGo_UWP.Rendering
 
         private int lastmapping = 0;
 
+        private string logtext = "";
         private void log(string text)
         {
+            logtext += text+ "\n";
+        }
 
+        private void dumplog()
+        {
+            System.Diagnostics.Debug.WriteLine(logtext);
+            logtext = "";
+        }
+
+        private float toFloat(string v)
+        {
+            try   { return (float)Convert.ToDouble(v); }
+            catch { return 0; }
         }
 
         public void process(string data)
@@ -329,6 +361,8 @@ namespace PokemonGo_UWP.Rendering
                     curmesh.id = lines[i].Split(':')[1].Split(',')[0].Trim();
                     lastmapping = 0;
                     state = States.ParseGeometry;
+                    log("found geometry: " + curmesh.id);
+
                 }
                 else if (lines[i].IndexOf("ShadingModel: ") != -1) { }
                 else if (lines[i].IndexOf("Model: ") != -1)
@@ -355,11 +389,22 @@ namespace PokemonGo_UWP.Rendering
                     save();
                     state = States.ParseConnections;
                 }
+                else if (lines[i].IndexOf("LayeredTexture: ") != -1)
+                {
+                    if (lines[i].IndexOf("{") > -1)
+                    {
+                        save();
+                        curLayeredTexture.id = lines[i].Split(':')[1].Split(',')[0].Trim();
+                        state = States.ParseLayeredTexture;
+                        log("found layered texture: " + curLayeredTexture.id);
+                    }
+                }
                 else if (lines[i].IndexOf("Texture: ") != -1)
                 {
                     save();
                     curTexture.id = lines[i].Split(':')[1].Split(',')[0].Trim();
                     state = States.ParseTexture;
+                    log("found texture: " + curTexture.id);
                 }
 
                 if (state == States.ParseConnections)
@@ -372,14 +417,37 @@ namespace PokemonGo_UWP.Rendering
                             var obj1 = objects[values[1].Trim()];
                             var obj2 = objects[values[2].Trim()];
 
+//                            log("connection from " + obj1.id + " ("+obj1.type+") to " + obj2.id + " ("+ obj2.type + ")");
+
                             if (obj1.type == "mesh" && obj2.type == "model")
                             {
-                                log("Model " + ((fbxModel)obj2).name + " has geometry");
+                                log(" Model " + ((fbxModel)obj2).name + " has geometry");
                                 ((fbxModel)obj2).mesh = (fbxMesh)obj1;
                             }
-                            else if (obj1.type == "material" && obj2.type == "model") ((fbxMaterial)obj1).models.Add((fbxModel)obj2);
-                            else if (obj2.type == "material" && obj1.type == "texture") ((fbxMaterial)obj2).texture = ((fbxTexture)obj1).file;
-                        } catch { }
+                            else if (obj1.type == "material" && obj2.type == "model")
+                            {
+                                log(" Material "+ ((fbxMaterial)obj1).name + " has model " + ((fbxModel)obj2).name);
+                                ((fbxMaterial)obj1).models.Add((fbxModel)obj2);
+                            }
+                            else if (obj1.type == "texture" && obj2.type == "material")
+                            {
+                                log(" Material " + ((fbxMaterial)obj2).name + " has texture " + ((fbxTexture)obj1).file);
+                                ((fbxMaterial)obj2).texture = ((fbxTexture)obj1);
+                            }
+                            else if (obj1.type == "layeredtexture" && obj2.type == "material")
+                            {
+                                log(" Material " + ((fbxMaterial)obj2).name + " has layeredtexture " + ((fbxLayeredTexture)obj1).id);
+                                log("  this reslves to texture " + ((fbxLayeredTexture)obj1).texture.file);
+                                ((fbxMaterial)obj2).texture = ((fbxLayeredTexture)obj1).texture;
+                            }
+                            else if (obj1.type == "texture" && obj2.type == "layeredtexture")
+                            {
+                                log(" Texture " + ((fbxTexture)obj1).file + " has layer " + obj2.id);
+                                ((fbxLayeredTexture)obj2).texture = ((fbxTexture)obj1);
+                                ((fbxTexture)obj1).alpha = ((fbxLayeredTexture)obj2).alpha;
+                            }
+                        }
+                        catch { }
                     }
                 }
 
@@ -390,7 +458,16 @@ namespace PokemonGo_UWP.Rendering
                         var values = lines[i].Trim().Split('"');
                         var parts = values[1].Trim().Split('\\');
                         curTexture.file = parts[parts.Length - 1];
-                        log("Found texture: " + curTexture.file);
+                        log(" texture file: " + curTexture.file);
+                    }
+                }
+                else if (state == States.ParseLayeredTexture)
+                {
+                    if (lines[i].IndexOf("Alphas") != -1)
+                    {
+                        var values = lines[i].Trim().Split(':');
+                        curLayeredTexture.alpha = toFloat(values[1].Trim());
+                        log(" layer texture alpha: " + curLayeredTexture.alpha);
                     }
                 }
                 else if (state == States.ParseModel)
@@ -398,23 +475,23 @@ namespace PokemonGo_UWP.Rendering
                     if (lines[i].IndexOf("Lcl Rotation") != -1)
                     {
                         var values = lines[i].Trim().Split(',');
-                        curmodel.rotation.X = (float)Convert.ToDouble(values[4]);
-                        curmodel.rotation.Y = (float)Convert.ToDouble(values[5]);
-                        curmodel.rotation.Z = (float)Convert.ToDouble(values[6]);
+                        curmodel.rotation.X = toFloat(values[4]);
+                        curmodel.rotation.Y = toFloat(values[5]);
+                        curmodel.rotation.Z = toFloat(values[6]);
                     }
                     if (lines[i].IndexOf("Lcl Translation") != -1)
                     {
                         var values = lines[i].Trim().Split(',');
-                        curmodel.translation.X = (float)Convert.ToDouble(values[4]);
-                        curmodel.translation.Y = (float)Convert.ToDouble(values[5]);
-                        curmodel.translation.Z = (float)Convert.ToDouble(values[6]);
+                        curmodel.translation.X = toFloat(values[4]);
+                        curmodel.translation.Y = toFloat(values[5]);
+                        curmodel.translation.Z = toFloat(values[6]);
                     }
                     else if (lines[i].IndexOf("Lcl Scaling") != -1)
                     {
                         var values = lines[i].Trim().Split(',');
-                        curmodel.scale.X = (float)Convert.ToDouble(values[4]);
-                        curmodel.scale.Y = (float)Convert.ToDouble(values[5]);
-                        curmodel.scale.Z = (float)Convert.ToDouble(values[6]);
+                        curmodel.scale.X = toFloat(values[4]);
+                        curmodel.scale.Y = toFloat(values[5]);
+                        curmodel.scale.Z = toFloat(values[6]);
                     }
                 }
 
@@ -423,7 +500,13 @@ namespace PokemonGo_UWP.Rendering
                     if (lines[i].IndexOf("P: ") != -1)
                     {
                         var values = lines[i].Split(':')[1].Trim().Split(',');
-                        //                        curmaterial[values[0].replace(/\"/g, "")] = values.slice(4, 7);
+                        Vector3 v = new Vector3(0, 0, 0);
+                        string name = values[0].Replace("\"", "");
+                        if (values.Length > 4) v.X = toFloat(values[4]);
+                        if (values.Length > 5) v.Y = toFloat(values[5]);
+                        if (values.Length > 6) v.Z = toFloat(values[6]);
+                        curmaterial.traits[name] = v;
+                        log(" material " + name + ": " + v.X + " " + v.Y + " " + v.Z);
                     }
                 }
 
@@ -442,7 +525,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) if (v.Length>0) values.Add((float)Convert.ToDouble(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length>0) values.Add(toFloat(v));
                             if (values.Count == num) break;
                         }
                         curmesh.vertexs = values;
@@ -489,7 +572,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) values.Add((float)Convert.ToDouble(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) values.Add(toFloat(v));
                             if (values.Count == num) break;
                         }
                         curmesh.normals = values;
@@ -509,7 +592,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            uvvalues.pop();
-                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) uvvalues.Add((float)Convert.ToDouble(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) uvvalues.Add(toFloat(v));
                             if (uvvalues.Count == num) break;
                         }
                         curmesh.uv = uvvalues;
@@ -533,7 +616,9 @@ namespace PokemonGo_UWP.Rendering
                 }
             }
             save();
+            dumplog();
             done();
+            dumplog();
         }
     }
 }
