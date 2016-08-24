@@ -327,7 +327,7 @@ namespace PokemonGo_UWP.Rendering
         private string logtext = "";
         private void log(string text)
         {
-            logtext += text+ "\n";
+            logtext += text + "\n";
         }
 
         private void dumplog()
@@ -338,7 +338,7 @@ namespace PokemonGo_UWP.Rendering
 
         private float toFloat(string v)
         {
-            try   { return (float)Convert.ToDouble(v); }
+            try { return (float)Convert.ToDouble(v); }
             catch { return 0; }
         }
 
@@ -417,7 +417,7 @@ namespace PokemonGo_UWP.Rendering
                             var obj1 = objects[values[1].Trim()];
                             var obj2 = objects[values[2].Trim()];
 
-//                            log("connection from " + obj1.id + " ("+obj1.type+") to " + obj2.id + " ("+ obj2.type + ")");
+                            //                            log("connection from " + obj1.id + " ("+obj1.type+") to " + obj2.id + " ("+ obj2.type + ")");
 
                             if (obj1.type == "mesh" && obj2.type == "model")
                             {
@@ -426,7 +426,7 @@ namespace PokemonGo_UWP.Rendering
                             }
                             else if (obj1.type == "material" && obj2.type == "model")
                             {
-                                log(" Material "+ ((fbxMaterial)obj1).name + " has model " + ((fbxModel)obj2).name);
+                                log(" Material " + ((fbxMaterial)obj1).name + " has model " + ((fbxModel)obj2).name);
                                 ((fbxMaterial)obj1).models.Add((fbxModel)obj2);
                             }
                             else if (obj1.type == "texture" && obj2.type == "material")
@@ -525,7 +525,7 @@ namespace PokemonGo_UWP.Rendering
                             var a = lines[i].IndexOf("a:");
                             if (a != -1) lines[i] = lines[i].Substring(a + 3);
                             //                            values.pop();
-                            foreach (string v in lines[i].Split(',')) if (v.Length>0) values.Add(toFloat(v));
+                            foreach (string v in lines[i].Split(',')) if (v.Length > 0) values.Add(toFloat(v));
                             if (values.Count == num) break;
                         }
                         curmesh.vertexs = values;
@@ -618,6 +618,197 @@ namespace PokemonGo_UWP.Rendering
             save();
             dumplog();
             done();
+            dumplog();
+        }
+    }
+
+    internal class fbxCursor
+    {
+        public fbxCursor(ref byte[] d, int o)
+        {
+            data = d;
+            offset = o;
+        }
+
+        public byte[] data;
+        public int offset;
+    }
+
+    public class mxFBXLoaderB
+    {
+        private string logtext = "";
+        private string indent = "";
+        private void log(string text)
+        {
+            logtext += text + "\n";
+        }
+
+        private void dumplog()
+        {
+            System.Diagnostics.Debug.WriteLine(logtext);
+            logtext = "";
+        }
+
+        private int getInteger(fbxCursor cursor)
+        {
+            int val =  BitConverter.ToInt32(cursor.data, cursor.offset);
+            cursor.offset += 4;
+            return val;
+        }
+
+        private short getShort(fbxCursor cursor)
+        {
+            short ret = BitConverter.ToInt16(cursor.data, cursor.offset);
+            cursor.offset += 1;
+            return ret;
+        }
+
+        private char getChar(fbxCursor cursor)
+        {
+            char ret = BitConverter.ToChar(cursor.data, cursor.offset);
+            cursor.offset += 1;
+            return ret;
+        }
+
+        private string getString(fbxCursor cursor)
+        {
+            var len = getShort(cursor);
+            var result = "";
+            for (var i = 0; i < len; i++)
+                result += getChar(cursor);
+            return result;
+        }
+
+        // make classes for each type:
+        // fbxData { enum type, byte[] data, function Value() { return real type } }
+        // obj thing that holds { Dictionary<string, List<obj> subobj, Dictionary<int, fbxData> values }
+        private class fbxData
+        {
+            public byte[] data;
+            public char type;
+            public string toString() { return "";  }
+        }
+
+        private class fbxRoot
+        {
+            public string name;
+            public Dictionary<string, List<fbxRoot>> subobjects;
+            public List<fbxData> values;
+        }
+
+        private fbxData parsePropertyRecord(fbxCursor cursor)
+        {
+            var type = getChar(cursor);
+            fbxData ret = new fbxData();
+            //            if (type == 'Y')      return (/* "(small integer) "  + */ getSmallInteger(cursor));
+            //            else if (type == 'C') return (/* "(bool) "           + */ getBool(cursor));
+            //            else if (type == 'I') return (/* "(integer) "        + */ getInteger(cursor));
+            //            else if (type == 'F') return (/* "(float) "          + */ getFloat(cursor));
+            //            else if (type == 'D') return (/* "(wide float) "     + */ getWideFloat(cursor));
+            //            else if (type == 'L') return (/* "(wide integer) "   + */ getWideInteger(cursor));
+            //            else if (type == 'f') return (/* "(float[]) "        + */ getArrayFloat(cursor));
+            //            else if (type == 'd') return (/* "(wide float[]) "   + */ getArrayWideFloat(cursor));
+            //            else if (type == 'l') return (/* "(wide integer[]) " + */ getArrayWideInteger(cursor));
+            //            else if (type == 'i') return (/* "(integer[]) "      + */ getArrayInteger(cursor));
+            //            else if (type == 'b') return (/* "(bool[]) "         + */ getArrayBool(cursor));
+            //            else if (type == 'S') return (/* "(string) "         + */ getLongString(cursor));
+            //            else if (type == 'R') return (/* "(data) "           + */ getData(cursor));
+            //            else
+            //                return "(missing type)";
+            return ret;
+        }
+
+        private bool parseObjectRecord(fbxRoot parent, fbxCursor cursor)
+        {
+            string buf = "";
+
+            var end = getInteger(cursor);    // end offset
+            var len = getInteger(cursor);    // num properties
+            var bytelen = getInteger(cursor); // properties byte length
+
+            var name = getString(cursor);
+            fbxRoot obj = new fbxRoot();
+            obj.name = name;
+            buf += name;
+            // add to parent
+            if (parent.subobjects.ContainsKey(name) == false) parent.subobjects[name] = new List<fbxRoot>();
+            parent.subobjects[name].Add(obj);
+
+//            if (obj[name])
+//            {
+//                if (Array.isArray(obj[name]) == false)
+//                {
+//                    var tmp = obj[name];
+//                    obj[name] = [];
+//                    obj[name].push(tmp);
+//                }
+//                var tmp = { };
+//                obj[name].push(tmp);
+//                obj = tmp;
+//            }
+//            else
+//            {
+//                obj[name] = { };
+//                obj = obj[name];
+//            }
+
+            // obj is now Dictionary<int, propertyrecord>
+            for (var i = 0; i < len; ++i)
+            {
+                if (buf.Length > 1000) { log(buf); buf = ""; }
+                if (i == 0) buf += ": ";
+                if (i > 0) buf += ", ";
+                var val = parsePropertyRecord(cursor);
+                buf += val.toString();
+                obj.values.Add(val);
+            }
+            log(buf);
+
+            if (end == 0) return false;
+
+            if (cursor.offset != end)
+            {
+                log("{");
+                indent += "  ";
+                while (cursor.offset != end)
+                {
+                    parseObjectRecord(obj, cursor);
+                    if (end - cursor.offset == 13)
+                    {
+                        for (var i = 0; i < 13; ++i)
+                            if (cursor.data[cursor.offset + i] != 0) log("< expected null >");
+                        cursor.offset += 13;
+                    }
+                }
+
+                indent = indent.Substring(0, indent.Length - 2);
+                log("}");
+            }
+
+            return true;
+        }
+
+        public void process(ref byte[] bytes)
+        {
+            // header check
+            string header = "";
+            for (var i = 0; i < 20; i++)
+                header += Convert.ToChar(bytes[i]);
+
+            if (header != "Kaydara FBX Binary  ") log("Missing valid header");
+            if (bytes[20] != 0x0) log("Missing magic number");
+            if (bytes[21] != 0x1A) log("Missing magic number");
+            if (bytes[22] != 0x0) log("Missing magic number");
+
+            // extract objects
+            fbxCursor cursor = new fbxCursor(ref bytes, 23);
+            log("File version:" + getInteger(cursor));
+
+            fbxRoot root = new fbxRoot();
+            while (cursor.offset != bytes.Length)
+                if (!parseObjectRecord(root, cursor)) break;
+
+            log("Decoded");
             dumplog();
         }
     }

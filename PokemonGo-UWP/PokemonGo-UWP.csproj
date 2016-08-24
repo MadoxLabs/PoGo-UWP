@@ -485,6 +485,7 @@
     <Content Include="Assets\Fonts\Lato-Regular.ttf" />
     <Content Include="Assets\Fonts\Lato-Bold.ttf" />
     <Content Include="Assets\Shaders\test.fbx" />
+    <Content Include="Assets\Shaders\testb.fbx" />
     <None Include="project.json" />
     <PRIResource Include="Strings\de-CH\Resources.resw" />
     <PRIResource Include="Strings\de-CH\PokemonTypes.resw" />
