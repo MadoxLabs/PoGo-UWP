@@ -656,16 +656,16 @@ namespace PokemonGo_UWP.Rendering
             return val;
         }
 
-        private short getShort(fbxCursor cursor)
+        private byte getShort(fbxCursor cursor)
         {
-            short ret = BitConverter.ToInt16(cursor.data, cursor.offset);
+            byte ret = cursor.data[cursor.offset]; // BitConverter.ToInt8(cursor.data, cursor.offset);
             cursor.offset += 1;
             return ret;
         }
 
         private char getChar(fbxCursor cursor)
         {
-            char ret = BitConverter.ToChar(cursor.data, cursor.offset);
+            char ret = (char)cursor.data[cursor.offset]; //BitConverter.ToChar(cursor.data, cursor.offset);
             cursor.offset += 1;
             return ret;
         }
@@ -686,14 +686,16 @@ namespace PokemonGo_UWP.Rendering
         {
             public byte[] data;
             public char type;
-            public string toString() { return "";  }
+            private string _val = "";
+
+            public string toString() { return _val;  }
         }
 
         private class fbxRoot
         {
             public string name;
-            public Dictionary<string, List<fbxRoot>> subobjects;
-            public List<fbxData> values;
+            public Dictionary<string, List<fbxRoot>> subobjects = new Dictionary<string, List<fbxRoot>>();
+            public List<fbxData> values = new List<fbxData>();
         }
 
         private fbxData parsePropertyRecord(fbxCursor cursor)
