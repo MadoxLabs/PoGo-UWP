@@ -4,8 +4,10 @@ using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using System;
 using System.Collections.Generic;
-
+using System.IO;
+using System.IO.Compression;
 using Buffer = SharpDX.Direct3D11.Buffer;
+using Ionic.Zlib;
 
 namespace PokemonGo_UWP.Rendering
 {
@@ -622,25 +624,13 @@ namespace PokemonGo_UWP.Rendering
         }
     }
 
-    internal class fbxCursor
-    {
-        public fbxCursor(ref byte[] d, int o)
-        {
-            data = d;
-            offset = o;
-        }
-
-        public byte[] data;
-        public int offset;
-    }
-
     public class mxFBXLoaderB
     {
         private string logtext = "";
         private string indent = "";
         private void log(string text)
         {
-            logtext += text + "\n";
+            logtext += "\n"+indent + text;
         }
 
         private void dumplog()
@@ -651,8 +641,36 @@ namespace PokemonGo_UWP.Rendering
 
         private int getInteger(fbxCursor cursor)
         {
-            int val =  BitConverter.ToInt32(cursor.data, cursor.offset);
+            int val = BitConverter.ToInt32(cursor.data, cursor.offset);
             cursor.offset += 4;
+            return val;
+        }
+
+        private Int16 getSmallInteger(fbxCursor cursor)
+        {
+            Int16 val = BitConverter.ToInt16(cursor.data, cursor.offset);
+            cursor.offset += 2;
+            return val;
+        }
+
+        private Int64 getWideInteger(fbxCursor cursor)
+        {
+            Int64 val = BitConverter.ToInt64(cursor.data, cursor.offset);
+            cursor.offset += 8;
+            return val;
+        }
+
+        private float getFloat(fbxCursor cursor)
+        {
+            float val = BitConverter.ToSingle(cursor.data, cursor.offset);
+            cursor.offset += 4;
+            return val;
+        }
+
+        private double getWideFloat(fbxCursor cursor)
+        {
+            double val = BitConverter.ToDouble(cursor.data, cursor.offset);
+            cursor.offset += 8;
             return val;
         }
 
@@ -670,6 +688,13 @@ namespace PokemonGo_UWP.Rendering
             return ret;
         }
 
+        private bool getBool(fbxCursor cursor)
+        {
+            char ret = (char)cursor.data[cursor.offset]; //BitConverter.ToChar(cursor.data, cursor.offset);
+            cursor.offset += 1;
+            return ret == 0 ? true : false;
+        }
+
         private string getString(fbxCursor cursor)
         {
             var len = getShort(cursor);
@@ -679,16 +704,170 @@ namespace PokemonGo_UWP.Rendering
             return result;
         }
 
+        private string getLongString(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            var result = "";
+            for (var i = 0; i < len; i++)
+                result += getChar(cursor);
+            return result;
+        }
+
+        private string getData(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            cursor.offset += len;
+            return "(" + len + "bytes)";
+        }
+
+        private float[] getArrayFloat(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            var encoding = getInteger(cursor);
+            var encodinglen = getInteger(cursor);
+
+            if (encoding > 0)
+            {
+                Stream stream = new MemoryStream(cursor.data, cursor.offset, encodinglen);
+                ZlibStream unzip = new ZlibStream(stream, Ionic.Zlib.CompressionMode.Decompress);
+                byte[] unzipdata = new byte[len * 4];
+                fbxCursor unzipped = new fbxCursor(ref unzipdata, 0);
+                unzip.Read(unzipped.data, 0, len * 4);
+                cursor.offset += encodinglen;
+                cursor = unzipped;
+            }
+
+            float[] ret = new float[len];
+            for (int i = 0; i < len; ++i)
+                ret[i] = getFloat(cursor);
+
+            return ret;
+        }
+
+        private double[] getArrayWideFloat(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            var encoding = getInteger(cursor);
+            var encodinglen = getInteger(cursor);
+
+            if (encoding > 0)
+            {
+                Stream stream = new MemoryStream(cursor.data, cursor.offset, encodinglen);
+                ZlibStream unzip = new ZlibStream(stream, Ionic.Zlib.CompressionMode.Decompress);
+                byte[] unzipdata = new byte[len*8];
+                fbxCursor unzipped = new fbxCursor(ref unzipdata, 0);
+                unzip.Read(unzipped.data, 0, len*8);
+                cursor.offset += encodinglen;
+                cursor = unzipped;
+            }
+
+            double[] ret = new double[len];
+            for (int i = 0; i < len; ++i)
+                ret[i] = getWideFloat(cursor);
+
+            return ret;
+        }
+
+        private int[] getArrayInteger(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            var encoding = getInteger(cursor);
+            var encodinglen = getInteger(cursor);
+
+            if (encoding > 0)
+            {
+                Stream stream = new MemoryStream(cursor.data, cursor.offset, encodinglen);
+                ZlibStream unzip = new ZlibStream(stream, Ionic.Zlib.CompressionMode.Decompress);
+                byte[] unzipdata = new byte[len * 4];
+                fbxCursor unzipped = new fbxCursor(ref unzipdata, 0);
+                unzip.Read(unzipped.data, 0, len * 4);
+                cursor.offset += encodinglen;
+                cursor = unzipped;
+            }
+
+            int[] ret = new int[len];
+            for (int i = 0; i < len; ++i)
+                ret[i] = getInteger(cursor);
+
+            return ret;
+        }
+
+        private Int64[] getArrayWideInteger(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            var encoding = getInteger(cursor);
+            var encodinglen = getInteger(cursor);
+
+            if (encoding > 0)
+            {
+                Stream stream = new MemoryStream(cursor.data, cursor.offset, encodinglen);
+                ZlibStream unzip = new ZlibStream(stream, Ionic.Zlib.CompressionMode.Decompress);
+                byte[] unzipdata = new byte[len * 8];
+                fbxCursor unzipped = new fbxCursor(ref unzipdata, 0);
+                unzip.Read(unzipped.data, 0, len * 8);
+                cursor.offset += encodinglen;
+                cursor = unzipped;
+            }
+
+            Int64[] ret = new Int64[len];
+            for (int i = 0; i < len; ++i)
+                ret[i] = getWideInteger(cursor);
+
+            return ret;
+        }
+
+        private bool[] getArrayBool(fbxCursor cursor)
+        {
+            var len = getInteger(cursor);
+            var encoding = getInteger(cursor);
+            var encodinglen = getInteger(cursor);
+
+            if (encoding > 0)
+            {
+                Stream stream = new MemoryStream(cursor.data, cursor.offset, encodinglen);
+                ZlibStream unzip = new ZlibStream(stream, Ionic.Zlib.CompressionMode.Decompress);
+                byte[] unzipdata = new byte[len * 1];
+                fbxCursor unzipped = new fbxCursor(ref unzipdata, 0);
+                unzip.Read(unzipped.data, 0, len * 1);
+                cursor.offset += encodinglen;
+                cursor = unzipped;
+            }
+
+            bool[] ret = new bool[len];
+            for (int i = 0; i < len; ++i)
+                ret[i] = getBool(cursor);
+
+            return ret;
+        }
+
         // make classes for each type:
         // fbxData { enum type, byte[] data, function Value() { return real type } }
         // obj thing that holds { Dictionary<string, List<obj> subobj, Dictionary<int, fbxData> values }
+        internal class fbxCursor
+        {
+            public fbxCursor(ref byte[] d, int o)
+            {
+                data = d;
+                offset = o;
+            }
+
+            public byte[] data;
+            public int offset;
+        }
+
         private class fbxData
         {
-            public byte[] data;
+            public fbxData(char t) { type = t; }
             public char type;
-            private string _val = "";
+            public string _val = "";
 
             public string toString() { return _val;  }
+        }
+
+        private class fbxData<Type> : fbxData
+        {
+            public fbxData(Type v, char t) : base(t) { value = v; _val = value.ToString();  }
+            public Type value;
         }
 
         private class fbxRoot
@@ -701,24 +880,23 @@ namespace PokemonGo_UWP.Rendering
         private fbxData parsePropertyRecord(fbxCursor cursor)
         {
             var type = getChar(cursor);
-            fbxData ret = new fbxData();
-            //            if (type == 'Y')      return (/* "(small integer) "  + */ getSmallInteger(cursor));
-            //            else if (type == 'C') return (/* "(bool) "           + */ getBool(cursor));
-            //            else if (type == 'I') return (/* "(integer) "        + */ getInteger(cursor));
-            //            else if (type == 'F') return (/* "(float) "          + */ getFloat(cursor));
-            //            else if (type == 'D') return (/* "(wide float) "     + */ getWideFloat(cursor));
-            //            else if (type == 'L') return (/* "(wide integer) "   + */ getWideInteger(cursor));
-            //            else if (type == 'f') return (/* "(float[]) "        + */ getArrayFloat(cursor));
-            //            else if (type == 'd') return (/* "(wide float[]) "   + */ getArrayWideFloat(cursor));
-            //            else if (type == 'l') return (/* "(wide integer[]) " + */ getArrayWideInteger(cursor));
-            //            else if (type == 'i') return (/* "(integer[]) "      + */ getArrayInteger(cursor));
-            //            else if (type == 'b') return (/* "(bool[]) "         + */ getArrayBool(cursor));
-            //            else if (type == 'S') return (/* "(string) "         + */ getLongString(cursor));
-            //            else if (type == 'R') return (/* "(data) "           + */ getData(cursor));
-            //            else
-            //                return "(missing type)";
+            fbxData ret = null;
+            if (type == 'Y')      ret = new fbxData<Int16>(getSmallInteger(cursor), type);
+            else if (type == 'C') ret = new fbxData<bool>(getBool(cursor), type);
+            else if (type == 'I') ret = new fbxData<int>(getInteger(cursor), type);
+            else if (type == 'F') ret = new fbxData<float>(getFloat(cursor), type);
+            else if (type == 'D') ret = new fbxData<double>(getWideFloat(cursor), type); 
+            else if (type == 'L') ret = new fbxData<Int64>(getWideInteger(cursor), type);
+            else if (type == 'f') ret = new fbxData<float[]>(getArrayFloat(cursor), type);
+            else if (type == 'd') ret = new fbxData<double[]>(getArrayWideFloat(cursor), type);
+            else if (type == 'l') ret = new fbxData<Int64[]>(getArrayWideInteger(cursor), type);
+            else if (type == 'i') ret = new fbxData<int[]>(getArrayInteger(cursor), type);
+            else if (type == 'b') ret = new fbxData<bool[]>(getArrayBool(cursor), type);
+            else if (type == 'S') ret = new fbxData<string>(getLongString(cursor), type);
+            else if (type == 'R') ret = new fbxData<string>(getData(cursor), type);
+            else ret = new fbxData<string>("(missing type)", type);
             return ret;
-        }
+        } 
 
         private bool parseObjectRecord(fbxRoot parent, fbxCursor cursor)
         {
@@ -728,31 +906,13 @@ namespace PokemonGo_UWP.Rendering
             var len = getInteger(cursor);    // num properties
             var bytelen = getInteger(cursor); // properties byte length
 
-            var name = getString(cursor);
+             var name = getString(cursor);
             fbxRoot obj = new fbxRoot();
             obj.name = name;
             buf += name;
             // add to parent
             if (parent.subobjects.ContainsKey(name) == false) parent.subobjects[name] = new List<fbxRoot>();
             parent.subobjects[name].Add(obj);
-
-//            if (obj[name])
-//            {
-//                if (Array.isArray(obj[name]) == false)
-//                {
-//                    var tmp = obj[name];
-//                    obj[name] = [];
-//                    obj[name].push(tmp);
-//                }
-//                var tmp = { };
-//                obj[name].push(tmp);
-//                obj = tmp;
-//            }
-//            else
-//            {
-//                obj[name] = { };
-//                obj = obj[name];
-//            }
 
             // obj is now Dictionary<int, propertyrecord>
             for (var i = 0; i < len; ++i)
@@ -786,7 +946,7 @@ namespace PokemonGo_UWP.Rendering
                 indent = indent.Substring(0, indent.Length - 2);
                 log("}");
             }
-
+           dumplog();
             return true;
         }
 

@@ -14,7 +14,8 @@
     "UniversalMapControl": "0.3.40",
     "WinRTXamlToolkit.Controls.Gauge.UWP": "2.0.0",
     "Xam.Plugin.DeviceMotion": "1.1.2",
-    "XamlAnimatedGif": "1.1.4"
+    "XamlAnimatedGif": "1.1.4",
+    "Zlib.Portable": "1.11.0"
   },
   "frameworks": {
     "uap10.0": {}
